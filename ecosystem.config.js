@@ -9,9 +9,11 @@ module.exports = {
         max_memory_restart: '200M',  // Reiniciar o processo caso o uso de memória ultrapasse 200MB
         env: {
           NODE_ENV: 'development',  // Definir o ambiente como desenvolvimento por padrão
+          PORT: process.env.PORT || 3000,
         },
         env_production: {
           NODE_ENV: 'production',  // Definir o ambiente como produção
+          PORT: process.env.PORT || 3000,
         },
       },
     ],
