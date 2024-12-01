@@ -6,10 +6,16 @@ const path = require('path');
 
 // Criação do app Express
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;  // Use a variável PORT para produção
 
 // Configuração do CORS para permitir requisições do frontend
-app.use(cors());
+const corsOptions = {
+    origin: 'https://cuidado-vida.web.app', // Substitua com o domínio do seu frontend
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type'],
+};
+
+app.use(cors(corsOptions));
 
 // Configuração para ler o corpo da requisição em JSON
 app.use(bodyParser.json());
@@ -37,14 +43,11 @@ client.on('qr', (qr) => {
 });
 
 client.on('authenticated', () => {
-    // Evite logs excessivos, mas registre quando a autenticação ocorrer
     console.log('Autenticado com sucesso!');
 });
 
 client.on('auth_failure', (message) => {
-    // Logar erros de autenticação de forma controlada
     console.error('Falha na autenticação:', message);
-    // Não reconectar imediatamente, somente quando necessário
 });
 
 client.on('ready', () => {
@@ -63,16 +66,14 @@ app.post('/send-message', async (req, res) => {
     }
 
     try {
-        // Adicionar verificação básica para garantir que o número esteja no formato correto
         const formattedNumber = number.replace(/[^\d]+/g, ''); // Remove qualquer caractere não numérico
-        if (formattedNumber.length < 10) {
+        if (formattedNumber.length < 11) { // 11 dígitos para números com DDD (Brasil por exemplo)
             return res.status(400).json({ error: 'Número inválido. Certifique-se de incluir o código do país e DDD.' });
         }
 
         const chat = await client.getChatById(`${formattedNumber}@c.us`);
 
         if (chat) {
-            // Enviar a mensagem
             await chat.sendMessage(message);
             return res.status(200).json({ status: 'Mensagem enviada com sucesso!' });
         } else {
@@ -101,8 +102,7 @@ app.listen(port, () => {
 // Função para monitorar falhas de conexão e reautenticar automaticamente
 client.on('disconnected', (reason) => {
     console.log('Cliente desconectado:', reason);
-    // Requisição para reautenticação (apenas se necessário)
     setTimeout(() => {
-        client.initialize();  // Reiniciar a sessão de forma controlada
+        client.initialize();
     }, 5000);  // Esperar 5 segundos antes de tentar reconectar
 });
