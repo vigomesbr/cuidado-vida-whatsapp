@@ -2,35 +2,45 @@ const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const cors = require('cors');
 const qrcode = require('qrcode');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 
-// Inicializar cliente do WhatsApp
+// Caminho persistente para autenticação
+const authPath = path.join('/opt/render/project/src', '.wwebjs_auth');
+
+// Limpar cache do WhatsApp (se necessário)
+const cachePath = path.join(authPath, 'session', 'Default', 'Cache', 'Cache_Data');
+if (fs.existsSync(cachePath)) {
+    try {
+        fs.rmSync(cachePath, { recursive: true, force: true });
+        console.log('Cache do WhatsApp limpo.');
+    } catch (err) {
+        console.error('Erro ao limpar o cache:', err);
+    }
+}
+
+// Inicializar cliente WhatsApp
 const client = new Client({
-    authStrategy: new LocalAuth(),
+    authStrategy: new LocalAuth({
+        dataPath: authPath,
+    }),
 });
 
-// Variáveis de controle
 let qrCodeUrl = null;
 let isClientReady = false;
 
-// Middleware de CORS para permitir acessos do frontend
-const allowedOrigins = ['https://cuidado-vida.web.app', 'http://localhost:3000'];
+// Middleware CORS
 app.use(cors({
-    origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
-            return callback(null, true);
-        }
-        callback(new Error('Não permitido pela política de CORS'));
-    },
+    origin: ['https://cuidado-vida.web.app', 'http://localhost:3000'],
 }));
 
-// Middleware para analisar requisições JSON
 app.use(express.json());
 
-// Evento para capturar e gerar QR Code
+// Capturar QR Code
 client.on('qr', (qr) => {
-    console.log('QR Code recebido:', qr);
+    console.log('QR Code recebido.');
     qrcode.toDataURL(qr, (err, url) => {
         if (err) {
             console.error('Erro ao gerar QR Code:', err);
@@ -40,23 +50,27 @@ client.on('qr', (qr) => {
     });
 });
 
-// Evento de cliente pronto
+// Cliente pronto
 client.on('ready', () => {
     console.log('WhatsApp client está pronto!');
     isClientReady = true;
 });
 
-// Evento de falha na autenticação
+// Falha na autenticação
 client.on('auth_failure', (message) => {
     console.error('Falha na autenticação:', message);
-    qrCodeUrl = null; // Resetar o QR Code caso ocorra falha
+    qrCodeUrl = null;
     isClientReady = false;
 });
 
-// Inicializar o cliente do WhatsApp
-client.initialize();
+// Inicializar o cliente com atraso (opcional)
+setTimeout(() => {
+    client.initialize().catch((error) => {
+        console.error('Erro ao inicializar o cliente:', error);
+    });
+}, 5000);
 
-// Endpoint para obter o QR Code
+// Endpoints
 app.get('/qr-code', (req, res) => {
     if (!qrCodeUrl) {
         return res.status(400).json({ error: 'QR Code não gerado ainda!' });
@@ -64,18 +78,12 @@ app.get('/qr-code', (req, res) => {
     res.json({ qrCodeUrl });
 });
 
-// Endpoint para enviar mensagens via WhatsApp
 app.post('/send-message', async (req, res) => {
     if (!isClientReady) {
         return res.status(503).json({ error: 'WhatsApp client não está pronto!' });
     }
 
     const { number, message } = req.body;
-
-    if (!number || !message) {
-        return res.status(400).json({ error: 'Número e mensagem são obrigatórios!' });
-    }
-
     try {
         const chatId = `${number}@c.us`;
         await client.sendMessage(chatId, message);
@@ -86,7 +94,7 @@ app.post('/send-message', async (req, res) => {
     }
 });
 
-// Definir a porta para o servidor
+// Porta do servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
