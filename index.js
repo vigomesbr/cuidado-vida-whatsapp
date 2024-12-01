@@ -6,7 +6,6 @@ const qrcode = require('qrcode');
 const app = express();
 const client = new Client({
     authStrategy: new LocalAuth(),
-     puppeteer: { headless: true }
 });
 
 // Middleware para permitir CORS (Cross-Origin Resource Sharing)
