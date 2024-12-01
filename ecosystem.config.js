@@ -1,7 +1,7 @@
 module.exports = {
     apps: [
       {
-        name: 'whatsapp-bot',  // Nome da aplicação
+        name: 'whatsapp-api',  // Nome da aplicação
         script: './index.js',  // Caminho do seu arquivo de entrada (geralmente index.js ou app.js)
         watch: true,  // Ativa a vigilância para reiniciar automaticamente em caso de mudanças
         instances: 1,  // O número de instâncias (idealmente, 1 em Render devido ao limite de threads)

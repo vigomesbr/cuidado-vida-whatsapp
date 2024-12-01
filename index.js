@@ -6,7 +6,7 @@ const path = require('path');
 
 // Criação do app Express
 const app = express();
-const port = process.env.PORT || 3000;
+const port = 3000;
 
 // Configuração do CORS para permitir requisições do frontend
 app.use(cors());
