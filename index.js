@@ -8,7 +8,7 @@ let client; // Declare client outside to initialize lazily
 
 // Middleware para permitir CORS
 app.use(cors({
-    origin: 'https://cuidado-vida.web.app/', // Substitua pela URL do seu frontend hospedado no Firebase
+    origin: 'https://cuidado-vida.web.app', // Substitua pela URL do seu frontend hospedado no Firebase
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type'],
 }));
