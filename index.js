@@ -1,115 +1,108 @@
-const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
+const express = require('express');
+const bodyParser = require('body-parser');
 const cors = require('cors');
-const qrcode = require('qrcode');
+const path = require('path');
+
+// Criação do app Express
 const app = express();
+const port = process.env.PORT || 3000;
 
-// Inicializando o cliente com LocalAuth para persistência de sessão
+// Configuração do CORS para permitir requisições do frontend
+app.use(cors());
+
+// Configuração para ler o corpo da requisição em JSON
+app.use(bodyParser.json());
+
+// Caminho onde as sessões serão armazenadas (garantir persistência)
+const sessionPath = path.join(__dirname, 'sessions');
+
+// Criação do cliente WhatsApp com LocalAuth para persistência
 const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: { headless: true }
-});
-
-// Middleware para permitir CORS (Cross-Origin Resource Sharing)
-app.use(cors({
-    origin: 'https://cuidado-vida.web.app', // Substitua pela URL do seu frontend hospedado no Firebase
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type'],
-}));
-
-// Middleware para análise de JSON (necessário para enviar mensagens)
-app.use(express.json());
-
-// Armazenar o URL do QR Code
-let qrCodeUrl = null;
-
-// Função para reiniciar o cliente e gerar um novo QR Code
-const restartClient = () => {
-    console.log('Sessão expirada ou falhou, gerando novo QR Code...');
-    client.destroy(); // Destrói a instância atual
-    client.initialize(); // Reinicializa a instância para gerar um novo QR Code
-};
-
-// Verificar se a autenticação foi bem-sucedida
-client.on('authenticated', () => {
-    console.log('WhatsApp autenticado com sucesso!');
-});
-
-client.on('auth_failure', () => {
-    console.log('Falha na autenticação! Gerando novo QR Code...');
-    qrCodeUrl = null;
-    restartClient(); // Reinicia o cliente e gera um novo QR Code
-});
-
-// Gerar o QR Code quando a sessão for inicializada
-client.on('qr', (qr) => {
-    qrcode.toDataURL(qr, (err, url) => {
-        if (err) {
-            console.error('Erro ao gerar QR Code', err);
-            return;
-        }
-        qrCodeUrl = url; // Armazenar o QR Code gerado
-    });
-});
-
-// Quando o cliente do WhatsApp estiver pronto
-client.on('ready', () => {
-    console.log('WhatsApp client está pronto!');
-});
-
-// Verificar se o cliente foi desconectado ou perdeu a conexão
-client.on('disconnected', () => {
-    console.log('Cliente desconectado! Gerando novo QR Code...');
-    qrCodeUrl = null;
-    restartClient(); // Reinicia a geração do QR Code
-});
-
-// Endpoint para obter o QR Code
-app.get('/qr-code', (req, res) => {
-    if (!qrCodeUrl) {
-        return res.status(400).json({ error: 'QR Code não gerado ainda!' });
+    authStrategy: new LocalAuth({
+        clientId: 'client1',  // Identificador único para a sessão
+        dataPath: sessionPath  // Caminho onde as sessões serão armazenadas
+    }),
+    puppeteer: {
+        headless: true,  // Executar o navegador sem interface gráfica
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--single-process', '--no-zygote'],
+        defaultViewport: null, // Não especificar viewport para evitar sobrecarga
     }
-    res.json({ qrCodeUrl });
 });
 
-// Endpoint para enviar mensagens via WhatsApp
+// Configuração para minimizar os logs e consumo de recursos
+client.on('qr', (qr) => {
+    console.log('QR RECEIVED (somente uma vez para escanear)', qr);
+    // Aqui você pode emitir o QR code via WebSocket ou uma rota HTTP para o frontend
+});
+
+client.on('authenticated', () => {
+    // Evite logs excessivos, mas registre quando a autenticação ocorrer
+    console.log('Autenticado com sucesso!');
+});
+
+client.on('auth_failure', (message) => {
+    // Logar erros de autenticação de forma controlada
+    console.error('Falha na autenticação:', message);
+    // Não reconectar imediatamente, somente quando necessário
+});
+
+client.on('ready', () => {
+    console.log('Cliente WhatsApp pronto para uso!');
+});
+
+// Inicializar o cliente
+client.initialize();
+
+// Endpoint para enviar mensagem via WhatsApp
 app.post('/send-message', async (req, res) => {
     const { number, message } = req.body;
 
-    // Validação para garantir que o número esteja no formato correto
-    if (!/^\d+$/.test(number)) {
-        return res.status(400).json({ error: 'Número inválido!' });
+    if (!number || !message) {
+        return res.status(400).json({ error: 'Número e mensagem são obrigatórios.' });
     }
 
-    const chatId = `${number}@c.us`;
-
-    // Validação para evitar banimento do número
     try {
-        // Evitar excesso de mensagens consecutivas (exemplo de precaução)
-        if (message.length > 4096) {
-            return res.status(400).json({ error: 'Mensagem muito longa!' });
+        // Adicionar verificação básica para garantir que o número esteja no formato correto
+        const formattedNumber = number.replace(/[^\d]+/g, ''); // Remove qualquer caractere não numérico
+        if (formattedNumber.length < 10) {
+            return res.status(400).json({ error: 'Número inválido. Certifique-se de incluir o código do país e DDD.' });
         }
 
-        // Verifica se o número já foi banido
-        const chat = await client.getChatById(chatId);
-        if (chat.isBlocked) {
-            return res.status(400).json({ error: 'Número bloqueado!' });
-        }
+        const chat = await client.getChatById(`${formattedNumber}@c.us`);
 
-        // Envia a mensagem
-        await client.sendMessage(chatId, message);
-        res.status(200).send({ status: 'Mensagem enviada!' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send({ error: 'Erro ao enviar mensagem' });
+        if (chat) {
+            // Enviar a mensagem
+            await chat.sendMessage(message);
+            return res.status(200).json({ status: 'Mensagem enviada com sucesso!' });
+        } else {
+            return res.status(400).json({ error: 'Não foi possível encontrar o chat com o número informado.' });
+        }
+    } catch (error) {
+        console.error('Erro ao enviar a mensagem:', error);
+        return res.status(500).json({ error: 'Erro ao enviar mensagem. Tente novamente.' });
     }
 });
 
-// Definindo a porta para o servidor
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Servidor rodando na porta ${PORT}`);
+// Endpoint para verificar o status da autenticação
+app.get('/status', (req, res) => {
+    if (client.info && client.info.pushname) {
+        res.json({ status: 'Autenticado', pushname: client.info.pushname });
+    } else {
+        res.json({ status: 'Não autenticado' });
+    }
 });
 
-// Inicializando o cliente
-client.initialize();
+// Iniciar o servidor Express
+app.listen(port, () => {
+    console.log(`Servidor rodando na porta ${port}`);
+});
+
+// Função para monitorar falhas de conexão e reautenticar automaticamente
+client.on('disconnected', (reason) => {
+    console.log('Cliente desconectado:', reason);
+    // Requisição para reautenticação (apenas se necessário)
+    setTimeout(() => {
+        client.initialize();  // Reiniciar a sessão de forma controlada
+    }, 5000);  // Esperar 5 segundos antes de tentar reconectar
+});
