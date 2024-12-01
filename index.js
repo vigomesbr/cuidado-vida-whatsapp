@@ -12,7 +12,7 @@ const client = new Client({
 
 // Middleware para permitir CORS (Cross-Origin Resource Sharing)
 app.use(cors({
-    origin: 'https://seu-frontend-firebase-url', // Substitua pela URL do seu frontend hospedado no Firebase
+    origin: 'https://cuidado-vida.web.app', // Substitua pela URL do seu frontend hospedado no Firebase
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type'],
 }));
