@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "pm2 start ecosystem.config.js --env production"
+    "start": "node index.js"
   },
   "keywords": [],
   "author": "",
@@ -13,8 +13,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.1",
-    "pm2": "^5.4.3",
     "qrcode": "^1.5.4",
-    "whatsapp-web.js": "^1.26.0"
+    "whatsapp-web.js": "^1.23.0"
   }
 }
