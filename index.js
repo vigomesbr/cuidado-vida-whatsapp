@@ -5,7 +5,13 @@ const qrcode = require('qrcode');
 
 const app = express();
 const client = new Client({
-    authStrategy: new LocalAuth()
+    authStrategy: new LocalAuth({
+        clientId: "client1",  // Identificador único para o cliente
+    }),
+    puppeteer: {
+        headless: true,  // Configuração para rodar sem uma interface gráfica
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    }
 });
 
 // Middleware para permitir CORS (Cross-Origin Resource Sharing)
